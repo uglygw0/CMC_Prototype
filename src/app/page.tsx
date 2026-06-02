@@ -18,7 +18,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 // Mock Data & Constants
 // ----------------------------------------------------------------------
 const STORE_NAMES = [
-  "카페 일상", "맛나 식당", "청춘 분식", "알파 문구", "마카롱 팩토리",
+  "카페 일상", "부대통령뚝배기", "청춘 분식", "알파 문구", "마카롱 팩토리",
   "고기창고", "스터디카페", "홍콩반점", "파스타 바", "샐러드볼",
   "동네포차", "라멘집", "베이커리", "편의점", "꽃집",
   "버거타운", "아이스크림", "명랑핫도그", "대학서점", "김밥천국",
@@ -243,9 +243,9 @@ export default function BingMoneyApp() {
     }
   }, [view, activeTab]);
 
-  // Camera access controller for scanner
+  // Camera access controller for scanner (Only for students)
   useEffect(() => {
-    if (view !== "app" || activeTab !== "scan" || !cameraEnabled) {
+    if (view !== "app" || activeTab !== "scan" || !cameraEnabled || user?.role !== "student") {
       setScanning(false);
       return;
     }
@@ -291,7 +291,57 @@ export default function BingMoneyApp() {
       }
       setScanning(false);
     };
-  }, [view, activeTab, cameraEnabled]);
+  }, [view, activeTab, cameraEnabled, user]);
+
+  // Listen for coupon usage in localStorage to update merchant logs in real-time
+  useEffect(() => {
+    if (view !== "app" || user?.role !== "merchant") return;
+
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === "bingmoney_coupons" && e.newValue) {
+        const parsedCoupons = JSON.parse(e.newValue);
+        const savedLogs = localStorage.getItem("bingmoney_merchant_logs");
+        let currentLogs = savedLogs ? JSON.parse(savedLogs) : [];
+        let updated = false;
+
+        // Check if any coupon was recently set to used
+        parsedCoupons.forEach((coupon: any) => {
+          if (coupon.used) {
+            // Check if we already logged this coupon usage
+            const logExists = currentLogs.some((l: any) => l.id === coupon.id);
+            if (!logExists) {
+              const timeStr = new Date().toLocaleTimeString("ko-KR", { 
+                hour: "2-digit", 
+                minute: "2-digit", 
+                second: "2-digit" 
+              });
+              const dateStr = new Date().toLocaleDateString("ko-KR");
+              
+              const newLog = {
+                id: coupon.id,
+                title: `${coupon.title} 사용 확인`,
+                time: timeStr,
+                date: dateStr
+              };
+              currentLogs = [newLog, ...currentLogs];
+              updated = true;
+            }
+          }
+        });
+
+        if (updated) {
+          const slicedLogs = currentLogs.slice(0, 30);
+          setMerchantLogs(slicedLogs);
+          localStorage.setItem("bingmoney_merchant_logs", JSON.stringify(slicedLogs));
+          showToast("학생의 쿠폰 사용이 실시간 확인되었습니다!", "success");
+          playBeepSound();
+        }
+      }
+    };
+
+    window.addEventListener("storage", handleStorage);
+    return () => window.removeEventListener("storage", handleStorage);
+  }, [view, user]);
 
   // QR Scanning loop
   useEffect(() => {
@@ -1395,111 +1445,45 @@ export default function BingMoneyApp() {
             {/* Scrollable Panel */}
             <main className="flex-1 overflow-y-auto p-5 space-y-5 pb-20">
               
-              {/* COUPON QR SCAN TAB (Zero-Click main screen) */}
+              {/* MERCHANT QR CODE DISPLAY TAB */}
               {activeTab === "scan" && (
-                <div className="space-y-5">
-                  <div className="space-y-1">
-                    <h2 className="text-sm font-extrabold text-slate-100">학생 리워드 스캔</h2>
-                    <p className="text-[10px] text-slate-500 font-medium">학생의 쿠폰 QR코드를 카메라 사각형 안에 비추어 주세요.</p>
+                <div className="space-y-6 text-center animate-fade-in">
+                  <div className="space-y-1.5 text-left">
+                    <h2 className="text-sm font-extrabold text-slate-100">우리 매장 QR 코드</h2>
+                    <p className="text-[10px] text-slate-500 font-medium">카운터나 테이블에 부착하여 학생들이 스캔할 수 있도록 해주세요.</p>
                   </div>
 
-                  {/* Camera Scanner Viewfinder */}
-                  <div className="relative aspect-square w-full max-w-[280px] mx-auto bg-black rounded-3xl overflow-hidden border-4 border-slate-800 shadow-2xl">
-                    <video ref={videoRef} className={`w-full h-full object-cover ${scanning ? "block" : "hidden"}`} />
-                    <canvas ref={canvasRef} className="hidden" />
+                  {/* QR Code Stand Card */}
+                  <Card className="bg-slate-900 border-slate-800 rounded-3xl p-6 shadow-2xl flex flex-col items-center justify-center max-w-[300px] mx-auto relative overflow-hidden">
+                    <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-emerald-500 to-teal-500" />
+                    <div className="mb-4 text-center">
+                      <h3 className="font-extrabold text-sm text-slate-100">부대통령뚝배기</h3>
+                      <p className="text-[8px] text-emerald-400 font-bold tracking-wider mt-0.5">BINGOMONEY OFFICIAL STAMP</p>
+                    </div>
+                    
+                    <div className="bg-white p-4 rounded-2xl shadow-lg border border-slate-800/20">
+                      <img 
+                        src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=bingmoney-store-부대통령뚝배기" 
+                        alt="Store QR Code" 
+                        className="w-[200px] h-[200px]"
+                      />
+                    </div>
 
-                    {scanning && (
-                      /* Framing overlay */
-                      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                        <div className="w-[180px] h-[180px] border border-emerald-500/20 relative">
-                          {/* Corner frames */}
-                          <div className="absolute -top-1 -left-1 w-4 h-4 border-t-4 border-l-4 border-emerald-400" />
-                          <div className="absolute -top-1 -right-1 w-4 h-4 border-t-4 border-r-4 border-emerald-400" />
-                          <div className="absolute -bottom-1 -left-1 w-4 h-4 border-b-4 border-l-4 border-emerald-400" />
-                          <div className="absolute -bottom-1 -right-1 w-4 h-4 border-b-4 border-r-4 border-emerald-400" />
-                          
-                          {/* Scanning laser line */}
-                          <div className="absolute left-0 w-full h-[2.5px] bg-emerald-400 shadow-md shadow-emerald-400/50 top-0" style={{
-                            animation: "scan-anim 2s linear infinite"
-                          }} />
-                        </div>
-                      </div>
-                    )}
-
-                    {!scanning && (
-                      <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-600 p-4 text-center space-y-3">
-                        <Camera size={44} className="opacity-40 animate-pulse text-emerald-400" />
-                        {cameraError ? (
-                          <p className="text-[10px] text-rose-400 font-bold px-2">{cameraError}</p>
-                        ) : (
-                          <p className="text-[10px]">카메라 피드를 불러오는 중...</p>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Success/Error overlay */}
-                    {scannerResult && (
-                      <div className={`absolute inset-0 flex flex-col items-center justify-center p-4 text-center z-20 ${
-                        scannerResult.status === "success" ? "bg-emerald-600/95 text-white" : "bg-rose-600/95 text-white"
-                      } animate-fade-in`}>
-                        {scannerResult.status === "success" ? (
-                          <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center text-emerald-600 mb-3 shadow-lg animate-in zoom-in duration-300">
-                            <Check size={24} strokeWidth={3} />
-                          </div>
-                        ) : (
-                          <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center text-rose-600 mb-3 shadow-lg animate-in zoom-in duration-300">
-                            <AlertCircle size={24} />
-                          </div>
-                        )}
-                        <h3 className="font-bold text-sm">{scannerResult.status === "success" ? "적용 완료!" : "적용 실패"}</h3>
-                        <p className="text-[10px] mt-1 opacity-90 max-w-[200px] break-keep">{scannerResult.message}</p>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Toggle Camera state */}
-                  <div className="flex justify-center">
-                    <Button 
-                      onClick={() => setCameraEnabled(!cameraEnabled)}
-                      className={`w-full max-w-[280px] py-4 text-xs font-bold rounded-xl transition-colors ${
-                        cameraEnabled ? "bg-slate-800 hover:bg-slate-700 text-slate-300" : "bg-emerald-500 hover:bg-emerald-600 text-slate-950"
-                      }`}
-                    >
-                      {cameraEnabled ? "카메라 스캔 임시 중지" : "카메라 스캔 다시 시작"}
-                    </Button>
-                  </div>
-
-                  {/* Simulation panel */}
-                  <Card className="bg-slate-900 border-slate-800 rounded-2xl shadow-sm text-slate-100">
-                    <CardHeader className="p-4 pb-2">
-                      <CardTitle className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
-                        <QrCode size={14} className="text-emerald-400" /> 모의 정산 스캐너 (가맹점용)
-                      </CardTitle>
-                      <CardDescription className="text-[9px] text-slate-500">
-                        현재 발급된 미사용 학생 쿠폰 중 하나를 선택해 즉시 모의 정산 처리를 실행할 수 있습니다.
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent className="p-4 pt-1">
-                      {coupons.filter(c => !c.used).length === 0 ? (
-                        <p className="text-[10px] text-slate-600 text-center py-4 font-medium">대기 중인 사용자 쿠폰이 없습니다.</p>
-                      ) : (
-                        <div className="space-y-1.5 max-h-[120px] overflow-y-auto pr-1">
-                          {coupons.filter(c => !c.used).map(coupon => (
-                            <div key={coupon.id} className="flex justify-between items-center bg-slate-850 p-2 border border-slate-800 rounded-xl text-[10px]">
-                              <span className="font-semibold truncate max-w-[170px] text-slate-300">{coupon.title}</span>
-                              <Button 
-                                size="sm"
-                                className="bg-emerald-500 hover:bg-emerald-600 text-slate-950 h-7 px-3 text-[9px] font-extrabold rounded-lg"
-                                onClick={() => handleScannedData(`bingmoney-coupon-${coupon.id}`)}
-                              >
-                                스캔 실행
-                              </Button>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </CardContent>
+                    <div className="mt-5 flex items-center gap-1.5 bg-slate-950 px-4 py-2 rounded-full border border-slate-850 text-slate-400 text-[9px] font-semibold">
+                      <QrCode size={12} className="text-emerald-400 animate-pulse" />
+                      스캔 시 '부대통령뚝배기' 도장 적립
+                    </div>
                   </Card>
+
+                  {/* Guide Panel */}
+                  <div className="bg-slate-900/40 border border-slate-850 p-4 rounded-2xl max-w-[300px] mx-auto text-left space-y-2">
+                    <h4 className="text-[10px] font-extrabold text-slate-200 flex items-center gap-1.5">
+                      <AlertCircle size={12} className="text-emerald-400" /> 사용 안내
+                    </h4>
+                    <p className="text-[9px] text-slate-400 leading-relaxed">
+                      학생들이 스마트폰 카메라나 BINGOMONEY 앱 내 <strong>[가게 QR 인식]</strong> 기능으로 위 QR 코드를 스캔하면, 학생의 빙고판에 <strong>'부대통령뚝배기'</strong> 스탬프가 자동으로 찍힙니다.
+                    </p>
+                  </div>
                 </div>
               )}
 
@@ -1557,8 +1541,8 @@ export default function BingMoneyApp() {
                   activeTab === "scan" ? "text-emerald-400 scale-105 font-bold" : "text-slate-500 hover:text-slate-400"
                 }`}
               >
-                <Camera size={22} className={activeTab === "scan" ? "fill-emerald-950/20" : ""} />
-                <span className="text-[9px]">쿠폰 QR 인식</span>
+                <QrCode size={22} />
+                <span className="text-[9px]">매장 QR 코드</span>
               </button>
 
               <button
