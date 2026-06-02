@@ -20,7 +20,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 const STORE_NAMES = [
   "카페 일상", "부대통령뚝배기", "청춘 분식", "알파 문구", "마카롱 팩토리",
   "고기창고", "스터디카페", "홍콩반점", "파스타 바", "샐러드볼",
-  "동네포차", "라멘집", "베이커리", "편의점", "꽃집",
+  "동네포차", "라멘집", "베이커리", "편의점", "맛나 식당",
   "버거타운", "아이스크림", "명랑핫도그", "대학서점", "김밥천국",
   "초밥집", "피자하우스", "치킨나라", "와플대학", "로스터리"
 ];
@@ -89,6 +89,13 @@ export default function BingMoneyApp() {
   const [cameraError, setCameraError] = useState("");
   const [cameraEnabled, setCameraEnabled] = useState(true);
 
+  // Dynamic store name resolver for merchant QR code
+  const storeDisplayName = user?.name || "부대통령뚝배기";
+  const storeKeyName = storeDisplayName.split(" (")[0];
+
+  // Simulator QR Code view helper
+  const [selectedStoreForQRImage, setSelectedStoreForQRImage] = useState<string | null>(null);
+
   // Reset camera enabled status on tab/view changes
   useEffect(() => {
     setCameraEnabled(true);
@@ -150,7 +157,17 @@ export default function BingMoneyApp() {
     // 2. Board state
     const savedBoard = localStorage.getItem("bingmoney_board");
     if (savedBoard) {
-      setBoard(JSON.parse(savedBoard));
+      const parsedBoard = JSON.parse(savedBoard);
+      // Migration: Ensure "맛나 식당" is on the board
+      const hasMatna = parsedBoard.some((cell: any) => cell.name === "맛나 식당");
+      if (!hasMatna) {
+        const replaceIndex = parsedBoard.findIndex((cell: any) => !cell.stamped && cell.name !== "부대통령뚝배기");
+        if (replaceIndex !== -1) {
+          parsedBoard[replaceIndex].name = "맛나 식당";
+          localStorage.setItem("bingmoney_board", JSON.stringify(parsedBoard));
+        }
+      }
+      setBoard(parsedBoard);
     } else {
       const shuffled = shuffleArray(STORE_NAMES);
       const initialBoard = shuffled.map((name, idx) => ({ id: idx, name, stamped: false }));
@@ -535,8 +552,8 @@ export default function BingMoneyApp() {
       // Merchant Login
       if (merchantForm.id === "admin" && merchantForm.password === "1234") {
         const merchantUser = { 
-          name: "부대통령뚝배기 (대학로점)", 
-          phone: "010-9999-1234", 
+          name: "맛나 식당 (대학로점)", 
+          phone: "010-8888-5678", 
           birth: "", 
           role: "merchant" as const 
         };
@@ -544,7 +561,7 @@ export default function BingMoneyApp() {
         localStorage.setItem("bingmoney_user", JSON.stringify(merchantUser));
         setView("app");
         setActiveTab("scan"); // Zero-click camera activation
-        showToast("가맹점(부대통령뚝배기) 모드로 로그인했습니다.", "success");
+        showToast("가맹점(맛나 식당) 모드로 로그인했습니다.", "success");
       } else {
         showToast("아이디 또는 비밀번호가 잘못되었습니다.", "error");
       }
@@ -641,7 +658,7 @@ export default function BingMoneyApp() {
       return;
     }
 
-    const titleLine = `[BINGOMONEY] 가맹점 쿠폰 인식 내역 (${user?.name || "부대통령뚝배기"})\n`;
+    const titleLine = `[BINGOMONEY] 가맹점 쿠폰 인식 내역 (${storeDisplayName})\n`;
     const dateLine = `추출 일시: ${new Date().toLocaleString("ko-KR")}\n`;
     const headerLine = `----------------------------------------\n`;
     const bodyLines = merchantLogs.map((log, idx) => 
@@ -874,12 +891,12 @@ export default function BingMoneyApp() {
                             onChange={(e) => setMerchantForm({ ...merchantForm, password: e.target.value })}
                           />
                         </div>
-                        <Alert className="bg-indigo-50 border-indigo-100 text-indigo-800 p-3 rounded-xl">
-                          <div className="flex gap-2 items-center">
-                            <AlertCircle size={14} className="text-indigo-600" />
-                            <p className="text-[10px] font-semibold leading-none">
-                              테스트용 ID: <strong className="text-indigo-700">admin</strong> / PW: <strong className="text-indigo-700">1234</strong>
-                            </p>
+                        <Alert className="bg-indigo-50 border-indigo-100 text-indigo-800 p-3.5 rounded-xl">
+                          <div className="flex gap-2 items-start">
+                            <AlertCircle size={14} className="text-indigo-600 mt-0.5 flex-shrink-0" />
+                            <div className="text-[10px] font-semibold leading-relaxed space-y-1">
+                              <p>테스트 ID (맛나 식당): <strong className="text-indigo-700">admin</strong> / PW: <strong className="text-indigo-700">1234</strong></p>
+                            </div>
                           </div>
                         </Alert>
                       </div>
@@ -1161,6 +1178,48 @@ export default function BingMoneyApp() {
                             {cell.name}
                           </Button>
                         ))}
+                      </div>
+
+                      {/* Store QR Image display utility */}
+                      <div className="mt-3 pt-3 border-t border-slate-100 space-y-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-[9px] text-slate-505 font-bold">실제 QR 이미지 띄우기:</span>
+                          <select 
+                            className="text-[9px] bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-slate-700 font-bold focus:outline-none"
+                            value={selectedStoreForQRImage || ""}
+                            onChange={(e) => setSelectedStoreForQRImage(e.target.value || null)}
+                          >
+                            <option value="">-- 가게 선택 --</option>
+                            {board.map(cell => (
+                              <option key={cell.id} value={cell.name}>{cell.name}</option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {selectedStoreForQRImage && (
+                          <div className="bg-slate-900 border border-slate-800 text-white rounded-xl p-3 flex flex-col items-center animate-in fade-in slide-in-from-top-2 duration-300">
+                            <div className="flex justify-between items-center w-full mb-1.5">
+                              <span className="text-[9px] font-bold text-slate-400">QR 코드 테스트 이미지</span>
+                              <button 
+                                onClick={() => setSelectedStoreForQRImage(null)}
+                                className="text-slate-400 hover:text-white p-0.5"
+                              >
+                                <X size={12} />
+                              </button>
+                            </div>
+                            <p className="text-[10px] font-extrabold mb-2 text-indigo-300">{selectedStoreForQRImage}</p>
+                            <div className="bg-white p-2 rounded-lg">
+                              <img 
+                                src={`https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=bingmoney-store-${selectedStoreForQRImage}`} 
+                                alt="Test Store QR Code" 
+                                className="w-[110px] h-[110px]"
+                              />
+                            </div>
+                            <p className="text-[8px] text-slate-400 mt-2 text-center leading-normal">
+                              스마트폰 카메라로 스캔하여 인식하거나, 카메라 렌즈에 비춰서 인식시켜 보세요.
+                            </p>
+                          </div>
+                        )}
                       </div>
                     </CardContent>
                   </Card>
@@ -1457,13 +1516,13 @@ export default function BingMoneyApp() {
                   <Card className="bg-slate-900 border-slate-800 rounded-3xl p-6 shadow-2xl flex flex-col items-center justify-center max-w-[300px] mx-auto relative overflow-hidden">
                     <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-emerald-500 to-teal-500" />
                     <div className="mb-4 text-center">
-                      <h3 className="font-extrabold text-sm text-slate-100">부대통령뚝배기</h3>
+                      <h3 className="font-extrabold text-sm text-slate-100">{storeKeyName}</h3>
                       <p className="text-[8px] text-emerald-400 font-bold tracking-wider mt-0.5">BINGOMONEY OFFICIAL STAMP</p>
                     </div>
                     
                     <div className="bg-white p-4 rounded-2xl shadow-lg border border-slate-800/20">
                       <img 
-                        src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=bingmoney-store-부대통령뚝배기" 
+                        src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=bingmoney-store-${storeKeyName}`} 
                         alt="Store QR Code" 
                         className="w-[200px] h-[200px]"
                       />
@@ -1471,7 +1530,7 @@ export default function BingMoneyApp() {
 
                     <div className="mt-5 flex items-center gap-1.5 bg-slate-950 px-4 py-2 rounded-full border border-slate-850 text-slate-400 text-[9px] font-semibold">
                       <QrCode size={12} className="text-emerald-400 animate-pulse" />
-                      스캔 시 '부대통령뚝배기' 도장 적립
+                      스캔 시 '{storeKeyName}' 도장 적립
                     </div>
                   </Card>
 
@@ -1481,7 +1540,7 @@ export default function BingMoneyApp() {
                       <AlertCircle size={12} className="text-emerald-400" /> 사용 안내
                     </h4>
                     <p className="text-[9px] text-slate-400 leading-relaxed">
-                      학생들이 스마트폰 카메라나 BINGOMONEY 앱 내 <strong>[가게 QR 인식]</strong> 기능으로 위 QR 코드를 스캔하면, 학생의 빙고판에 <strong>'부대통령뚝배기'</strong> 스탬프가 자동으로 찍힙니다.
+                      학생들이 스마트폰 카메라나 BINGOMONEY 앱 내 <strong>[가게 QR 인식]</strong> 기능으로 위 QR 코드를 스캔하면, 학생의 빙고판에 <strong>'{storeKeyName}'</strong> 스탬프가 자동으로 찍힙니다.
                     </p>
                   </div>
                 </div>
@@ -1495,7 +1554,7 @@ export default function BingMoneyApp() {
                   <div className="flex justify-between items-center">
                     <div>
                       <h2 className="text-sm font-extrabold text-slate-100">스탬프/쿠폰 정산 내역</h2>
-                      <p className="text-[10px] text-slate-500 font-medium">부대통령뚝배기 매장에서 승인된 정산 건입니다.</p>
+                      <p className="text-[10px] text-slate-500 font-medium">{storeKeyName} 매장에서 승인된 정산 건입니다.</p>
                     </div>
                     <Button
                       size="sm"
