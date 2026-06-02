@@ -65,7 +65,7 @@ export default function BingMoneyApp() {
   const [toastType, setToastType] = useState<"success" | "error" | "info">("info");
 
   // Form States
-  const [userForm, setUserForm] = useState({ name: "", phone: "", birth: "" });
+  const [userForm, setUserForm] = useState({ name: "", phone: "010-1234-5678", birth: "" });
   const [merchantForm, setMerchantForm] = useState({ id: "", password: "" });
   const [newFriendPhone, setNewFriendPhone] = useState("");
   const [newFriendName, setNewFriendName] = useState("");
