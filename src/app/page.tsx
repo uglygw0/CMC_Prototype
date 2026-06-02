@@ -14,6 +14,35 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
+// Safe LocalStorage wrapper to prevent crashes in private mode or restricted WebViews
+const safeLocalStorage = {
+  getItem: (key: string): string | null => {
+    try {
+      if (typeof window === "undefined") return null;
+      return localStorage.getItem(key);
+    } catch (e) {
+      console.warn("localStorage.getItem failed:", e);
+      return null;
+    }
+  },
+  setItem: (key: string, value: string): void => {
+    try {
+      if (typeof window === "undefined") return;
+      localStorage.setItem(key, value);
+    } catch (e) {
+      console.warn("localStorage.setItem failed:", e);
+    }
+  },
+  removeItem: (key: string): void => {
+    try {
+      if (typeof window === "undefined") return;
+      localStorage.removeItem(key);
+    } catch (e) {
+      console.warn("localStorage.removeItem failed:", e);
+    }
+  }
+};
+
 // ----------------------------------------------------------------------
 // Mock Data & Constants
 // ----------------------------------------------------------------------
@@ -53,6 +82,11 @@ const checkBingos = (stamped: boolean[]) => {
 // Main Application Component
 // ----------------------------------------------------------------------
 export default function BingMoneyApp() {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   // Navigation & Modal State
   const [view, setView] = useState<"login" | "signup" | "app">("login");
   const [loginRole, setLoginRole] = useState<"student" | "merchant">("student");
@@ -116,33 +150,33 @@ export default function BingMoneyApp() {
   // Sync wrappers
   const updateBoard = (newBoard: typeof board) => {
     setBoard(newBoard);
-    localStorage.setItem("bingmoney_board", JSON.stringify(newBoard));
+    safeLocalStorage.setItem("bingmoney_board", JSON.stringify(newBoard));
   };
 
   const updateCoupons = (newCoupons: typeof coupons) => {
     setCoupons(newCoupons);
-    localStorage.setItem("bingmoney_coupons", JSON.stringify(newCoupons));
+    safeLocalStorage.setItem("bingmoney_coupons", JSON.stringify(newCoupons));
   };
 
   const updateBingoCount = (count: number) => {
     setBingoCount(count);
-    localStorage.setItem("bingmoney_bingoCount", count.toString());
+    safeLocalStorage.setItem("bingmoney_bingoCount", count.toString());
   };
 
   const updateFriends = (newFriends: typeof friends) => {
     setFriends(newFriends);
-    localStorage.setItem("bingmoney_friends", JSON.stringify(newFriends));
+    safeLocalStorage.setItem("bingmoney_friends", JSON.stringify(newFriends));
   };
 
   const updateMerchantLogs = (newLogs: typeof merchantLogs) => {
     setMerchantLogs(newLogs);
-    localStorage.setItem("bingmoney_merchant_logs", JSON.stringify(newLogs));
+    safeLocalStorage.setItem("bingmoney_merchant_logs", JSON.stringify(newLogs));
   };
 
   // Load state from LocalStorage on mount
   useEffect(() => {
     // 1. Auto-login check
-    const savedUser = localStorage.getItem("bingmoney_user");
+    const savedUser = safeLocalStorage.getItem("bingmoney_user");
     if (savedUser) {
       const parsedUser = JSON.parse(savedUser);
       setUser(parsedUser);
@@ -155,7 +189,7 @@ export default function BingMoneyApp() {
     }
 
     // 2. Board state
-    const savedBoard = localStorage.getItem("bingmoney_board");
+    const savedBoard = safeLocalStorage.getItem("bingmoney_board");
     if (savedBoard) {
       const parsedBoard = JSON.parse(savedBoard);
       // Migration: Ensure "맛나 식당" is on the board
@@ -164,7 +198,7 @@ export default function BingMoneyApp() {
         const replaceIndex = parsedBoard.findIndex((cell: any) => !cell.stamped && cell.name !== "부대통령뚝배기");
         if (replaceIndex !== -1) {
           parsedBoard[replaceIndex].name = "맛나 식당";
-          localStorage.setItem("bingmoney_board", JSON.stringify(parsedBoard));
+          safeLocalStorage.setItem("bingmoney_board", JSON.stringify(parsedBoard));
         }
       }
       setBoard(parsedBoard);
@@ -172,11 +206,11 @@ export default function BingMoneyApp() {
       const shuffled = shuffleArray(STORE_NAMES);
       const initialBoard = shuffled.map((name, idx) => ({ id: idx, name, stamped: false }));
       setBoard(initialBoard);
-      localStorage.setItem("bingmoney_board", JSON.stringify(initialBoard));
+      safeLocalStorage.setItem("bingmoney_board", JSON.stringify(initialBoard));
     }
 
     // 3. Coupons state
-    const savedCoupons = localStorage.getItem("bingmoney_coupons");
+    const savedCoupons = safeLocalStorage.getItem("bingmoney_coupons");
     if (savedCoupons) {
       setCoupons(JSON.parse(savedCoupons));
     } else {
@@ -184,23 +218,23 @@ export default function BingMoneyApp() {
         { id: "c1", title: "[가입축하] 상권 전용 1,000원 할인권", used: false, date: "방금 전" }
       ];
       setCoupons(initialCoupons);
-      localStorage.setItem("bingmoney_coupons", JSON.stringify(initialCoupons));
+      safeLocalStorage.setItem("bingmoney_coupons", JSON.stringify(initialCoupons));
     }
 
     // 4. Bingo Count
-    const savedBingoCount = localStorage.getItem("bingmoney_bingoCount");
+    const savedBingoCount = safeLocalStorage.getItem("bingmoney_bingoCount");
     if (savedBingoCount) {
       setBingoCount(parseInt(savedBingoCount, 10));
     }
 
     // 5. Merchant scan logs
-    const savedLogs = localStorage.getItem("bingmoney_merchant_logs");
+    const savedLogs = safeLocalStorage.getItem("bingmoney_merchant_logs");
     if (savedLogs) {
       setMerchantLogs(JSON.parse(savedLogs));
     }
 
     // 6. Friends state
-    const savedFriends = localStorage.getItem("bingmoney_friends");
+    const savedFriends = safeLocalStorage.getItem("bingmoney_friends");
     if (savedFriends) {
       setFriends(JSON.parse(savedFriends));
     } else {
@@ -209,7 +243,7 @@ export default function BingMoneyApp() {
         { id: "f2", name: "이지은", phone: "010-9876-5432", bingoCount: 1 }
       ];
       setFriends(initialFriends);
-      localStorage.setItem("bingmoney_friends", JSON.stringify(initialFriends));
+      safeLocalStorage.setItem("bingmoney_friends", JSON.stringify(initialFriends));
     }
   }, []);
 
@@ -317,7 +351,7 @@ export default function BingMoneyApp() {
     const handleStorage = (e: StorageEvent) => {
       if (e.key === "bingmoney_coupons" && e.newValue) {
         const parsedCoupons = JSON.parse(e.newValue);
-        const savedLogs = localStorage.getItem("bingmoney_merchant_logs");
+        const savedLogs = safeLocalStorage.getItem("bingmoney_merchant_logs");
         let currentLogs = savedLogs ? JSON.parse(savedLogs) : [];
         let updated = false;
 
@@ -349,7 +383,7 @@ export default function BingMoneyApp() {
         if (updated) {
           const slicedLogs = currentLogs.slice(0, 30);
           setMerchantLogs(slicedLogs);
-          localStorage.setItem("bingmoney_merchant_logs", JSON.stringify(slicedLogs));
+          safeLocalStorage.setItem("bingmoney_merchant_logs", JSON.stringify(slicedLogs));
           showToast("학생의 쿠폰 사용이 실시간 확인되었습니다!", "success");
           playBeepSound();
         }
@@ -490,7 +524,7 @@ export default function BingMoneyApp() {
         const couponId = data.replace("bingmoney-coupon-", "");
         
         // Fetch fresh copy to avoid local storage drift
-        const savedCoupons = localStorage.getItem("bingmoney_coupons");
+        const savedCoupons = safeLocalStorage.getItem("bingmoney_coupons");
         if (savedCoupons) {
           const parsedCoupons = JSON.parse(savedCoupons);
           const couponIndex = parsedCoupons.findIndex((c: any) => c.id === couponId);
@@ -499,7 +533,7 @@ export default function BingMoneyApp() {
             const coupon = parsedCoupons[couponIndex];
             if (!coupon.used) {
               parsedCoupons[couponIndex].used = true;
-              localStorage.setItem("bingmoney_coupons", JSON.stringify(parsedCoupons));
+              safeLocalStorage.setItem("bingmoney_coupons", JSON.stringify(parsedCoupons));
               setCoupons(parsedCoupons);
 
               playBeepSound();
@@ -558,7 +592,7 @@ export default function BingMoneyApp() {
           role: "merchant" as const 
         };
         setUser(merchantUser);
-        localStorage.setItem("bingmoney_user", JSON.stringify(merchantUser));
+        safeLocalStorage.setItem("bingmoney_user", JSON.stringify(merchantUser));
         setView("app");
         setActiveTab("scan"); // Zero-click camera activation
         showToast("가맹점(맛나 식당) 모드로 로그인했습니다.", "success");
@@ -578,7 +612,7 @@ export default function BingMoneyApp() {
         role: "student" as const 
       };
       setUser(studentUser);
-      localStorage.setItem("bingmoney_user", JSON.stringify(studentUser));
+      safeLocalStorage.setItem("bingmoney_user", JSON.stringify(studentUser));
       setView("app");
       setActiveTab("bingo");
       showToast(`${studentUser.name} 학생님, 환영합니다!`, "success");
@@ -599,7 +633,7 @@ export default function BingMoneyApp() {
       role: "student" as const 
     };
     setUser(studentUser);
-    localStorage.setItem("bingmoney_user", JSON.stringify(studentUser));
+    safeLocalStorage.setItem("bingmoney_user", JSON.stringify(studentUser));
     setView("app");
     setActiveTab("bingo");
     showToast("가입 및 환영 1,000원 쿠폰 지급 완료!", "success");
@@ -608,7 +642,7 @@ export default function BingMoneyApp() {
   // Logout handler
   const handleLogout = () => {
     setUser(null);
-    localStorage.removeItem("bingmoney_user");
+    safeLocalStorage.removeItem("bingmoney_user");
     setView("login");
     setActiveTab("bingo");
     setDrawerOpen(false);
@@ -677,6 +711,17 @@ export default function BingMoneyApp() {
         showToast("클립보드 복사에 실패했습니다. 권한을 확인해주세요.", "error");
       });
   };
+
+  if (!mounted) {
+    return (
+      <div className="min-h-screen bg-slate-900 flex justify-center items-center p-4 font-sans text-slate-100">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+          <p className="text-xs font-semibold text-slate-400">로딩 중...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-900 flex justify-center items-center p-4 font-sans text-slate-900">
